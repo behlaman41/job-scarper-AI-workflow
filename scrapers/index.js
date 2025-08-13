@@ -78,47 +78,53 @@ class JobScraper {
     try {
       logger.info('Starting LinkedIn scraping...');
       
-      // Navigate to LinkedIn jobs
-      await page.goto(config.sites.linkedin.search_url);
-      await page.waitForTimeout(3000);
-
-      // Check if login is required
-      const loginRequired = await page.locator('input[name="session_key"]').isVisible().catch(() => false);
+      // Try multiple LinkedIn job search approaches
+      const searchUrls = [
+        `https://www.linkedin.com/jobs/search?keywords=${encodeURIComponent(config.user.preferred_roles[0])}&location=Delhi%2C%20India&geoId=102713980&f_TPR=r604800&position=1&pageNum=0`,
+        `https://www.linkedin.com/jobs/search?keywords=software%20engineer&location=Delhi%2C%20India&f_TPR=r604800`,
+        `https://www.linkedin.com/jobs/search?keywords=developer&location=India&f_TPR=r604800`
+      ];
       
-      if (loginRequired) {
-        logger.warn('LinkedIn login required - please login manually and save cookies');
-        return [];
+      let jobsFound = false;
+      
+      for (const searchUrl of searchUrls) {
+        try {
+          await page.goto(searchUrl, { waitUntil: 'networkidle' });
+          await page.waitForTimeout(3000);
+
+          // Check multiple selectors for job listings
+          const jobsVisible = await page.locator('.jobs-search__results-list, .job-card-container, .base-search-card, .job-search-card').first().isVisible({ timeout: 5000 }).catch(() => false);
+          
+          if (jobsVisible) {
+            jobsFound = true;
+            break;
+          }
+        } catch (e) {
+          logger.warn(`LinkedIn URL failed: ${searchUrl}`);
+          continue;
+        }
+      }
+      
+      if (!jobsFound) {
+        logger.warn('LinkedIn requires login or is blocking access - skipping LinkedIn scraping');
+        return jobs;
       }
 
-      // Apply location filter
-      const locationInput = page.locator('input[aria-label*="location"], input[placeholder*="location"]').first();
-      if (await locationInput.isVisible()) {
-        await locationInput.fill('Delhi NCR');
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(2000);
-      }
-
-      // Apply job title filter
-      const titleInput = page.locator('input[aria-label*="job title"], input[placeholder*="job title"]').first();
-      if (await titleInput.isVisible()) {
-        await titleInput.fill(config.user.preferred_roles[0]);
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(3000);
-      }
-
-      // Scrape job listings
-      const jobCards = await page.locator('[data-job-id], .job-card-container, .jobs-search-results__list-item').all();
+      // Scrape job listings with multiple selector strategies
+      const jobCards = await page.locator('.job-card-container, .jobs-search-results__list-item, .job-card-list__entity, .base-search-card, .job-search-card').all();
+      
+      logger.info(`Found ${jobCards.length} job cards on LinkedIn`);
       
       for (let i = 0; i < Math.min(jobCards.length, config.scraping.max_jobs_per_site); i++) {
         try {
           const card = jobCards[i];
           
-          const title = await card.locator('h3, .job-title, [data-test="job-title"]').first().textContent().catch(() => 'N/A');
-          const company = await card.locator('.job-card-container__company-name, [data-test="employer-name"]').first().textContent().catch(() => 'N/A');
-          const location = await card.locator('.job-card-container__metadata-item, [data-test="job-location"]').first().textContent().catch(() => 'N/A');
+          const title = await card.locator('h3 a, .job-card-list__title, .job-card-container__link').first().textContent().catch(() => 'N/A');
+          const company = await card.locator('.job-card-container__company-name, .job-card-list__company-name').first().textContent().catch(() => 'N/A');
+          const location = await card.locator('.job-card-container__metadata-item, .job-card-list__metadata').first().textContent().catch(() => 'N/A');
           const link = await card.locator('a').first().getAttribute('href').catch(() => '#');
           
-          if (title && title !== 'N/A' && this.isRelevantLocation(location)) {
+          if (title && title !== 'N/A' && title.trim() !== '') {
             jobs.push({
               title: title.trim(),
               company: company.trim(),
@@ -155,29 +161,76 @@ class JobScraper {
     try {
       logger.info('Starting Indeed scraping...');
       
-      const searchUrl = `${config.sites.indeed.search_url}?q=${encodeURIComponent(config.user.preferred_roles[0])}&l=Delhi%2C+Delhi`;
-      await page.goto(searchUrl);
-      await page.waitForTimeout(2000);
+      // Try multiple Indeed search approaches
+      const searchUrls = [
+        `https://in.indeed.com/jobs?q=${encodeURIComponent(config.user.preferred_roles[0])}&l=Delhi%2C+Delhi&fromage=7&sort=date`,
+        `https://in.indeed.com/jobs?q=software+engineer&l=Delhi%2C+Delhi&fromage=7&sort=date`,
+        `https://in.indeed.com/jobs?q=developer&l=Delhi%2C+Delhi&fromage=7&sort=date`,
+        `https://in.indeed.com/jobs?q=full+stack+developer&l=Delhi%2C+Delhi&fromage=7&sort=date`,
+        `https://in.indeed.com/jobs?q=software+engineer&l=India&fromage=7&sort=date`
+      ];
+      
+      let jobsFound = false;
+      
+      for (const searchUrl of searchUrls) {
+        try {
+          await page.goto(searchUrl, { waitUntil: 'networkidle' });
+          await page.waitForTimeout(3000);
 
-      // Handle popup if present
-      const popup = page.locator('[data-testid="popup-close"], .popover-x-button-close').first();
-      if (await popup.isVisible()) {
-        await popup.click();
+          // Handle various popups
+          try {
+            const popups = ['[data-testid="popup-close-button"]', '.popover-x-button-close', '.icl-CloseButton', '.pn', '.np:last-child'];
+            for (const popup of popups) {
+              const element = page.locator(popup).first();
+              if (await element.isVisible({ timeout: 2000 })) {
+                await element.click();
+                await page.waitForTimeout(1000);
+              }
+            }
+          } catch (e) {
+            // Ignore popup errors
+          }
+
+          // Wait for job listings to load with multiple selectors
+          try {
+            await page.waitForSelector('.job_seen_beacon, .slider_container, [data-jk], .jobsearch-SerpJobCard, .result', { timeout: 8000 });
+            jobsFound = true;
+            break;
+          } catch (e) {
+            logger.warn(`Indeed URL failed: ${searchUrl}`);
+            continue;
+          }
+        } catch (e) {
+          logger.warn(`Indeed URL error: ${searchUrl}`);
+          continue;
+        }
       }
-
-      // Scrape job listings
-      const jobCards = await page.locator('[data-testid="job-tile"], .job_seen_beacon, .slider_container .slider_item').all();
+      
+      if (!jobsFound) {
+        logger.warn('No job listings found on Indeed');
+        return jobs;
+      }
+      
+      // Scrape job listings with multiple selector strategies
+      let jobCards = await page.locator('.jobsearch-SerpJobCard, [data-testid="job-tile"], .job_seen_beacon, .slider_container .slider_item').all();
+      
+      logger.info(`Found ${jobCards.length} job cards on Indeed`);
       
       for (let i = 0; i < Math.min(jobCards.length, config.scraping.max_jobs_per_site); i++) {
         try {
           const card = jobCards[i];
           
-          const title = await card.locator('h2 a, .jobTitle a, [data-testid="job-title"]').first().textContent().catch(() => 'N/A');
-          const company = await card.locator('[data-testid="company-name"], .companyName').first().textContent().catch(() => 'N/A');
-          const location = await card.locator('[data-testid="job-location"], .companyLocation').first().textContent().catch(() => 'N/A');
-          const link = await card.locator('h2 a, .jobTitle a').first().getAttribute('href').catch(() => '#');
+          // Multiple selector strategies for title
+          let title = await card.locator('h2 a span, .jobTitle a span, [data-testid="job-title"], h2 a, .jobTitle a').first().textContent().catch(() => null);
+          if (!title) {
+            title = await card.locator('a[data-jk]').first().getAttribute('aria-label').catch(() => 'N/A');
+          }
           
-          if (title && title !== 'N/A' && this.isRelevantLocation(location)) {
+          const company = await card.locator('[data-testid="company-name"], .companyName, span[title]').first().textContent().catch(() => 'N/A');
+          const location = await card.locator('[data-testid="job-location"], .companyLocation, .locationsContainer').first().textContent().catch(() => 'N/A');
+          const link = await card.locator('h2 a, .jobTitle a, a[data-jk]').first().getAttribute('href').catch(() => '#');
+          
+          if (title && title !== 'N/A' && title.trim() !== '') {
             jobs.push({
               title: title.trim(),
               company: company.trim(),
@@ -214,18 +267,56 @@ class JobScraper {
     try {
       logger.info('Starting Naukri scraping...');
       
-      const searchUrl = `${config.sites.naukri.search_url}?k=${encodeURIComponent(config.user.preferred_roles[0])}`;
-      await page.goto(searchUrl);
-      await page.waitForTimeout(3000);
+      // Try multiple Naukri search approaches
+      const searchUrls = [
+        `https://www.naukri.com/jobs-in-delhi-ncr?k=${encodeURIComponent(config.user.preferred_roles[0])}`,
+        `https://www.naukri.com/software-engineer-jobs-in-delhi-ncr`,
+        `https://www.naukri.com/developer-jobs-in-delhi-ncr`,
+        `https://www.naukri.com/full-stack-developer-jobs-in-delhi-ncr`,
+        `https://www.naukri.com/jobs-in-delhi-ncr?k=software%20engineer&experience=2&salary=3,00,000,15,00,000`
+      ];
+      
+      let jobsFound = false;
+      
+      for (const searchUrl of searchUrls) {
+        try {
+          await page.goto(searchUrl, { waitUntil: 'networkidle' });
+          await page.waitForTimeout(4000);
 
-      // Handle login popup if present
-      const loginPopup = page.locator('.crossIcon, .close, [data-test="modal-close"]').first();
-      if (await loginPopup.isVisible()) {
-        await loginPopup.click();
+          // Handle various popups
+          try {
+            const popups = ['.crossIcon', '.close', '[data-test="modal-close"]', '.popupCloseIcon', '.closeIcon'];
+            for (const popup of popups) {
+              const element = page.locator(popup).first();
+              if (await element.isVisible({ timeout: 2000 })) {
+                await element.click();
+                await page.waitForTimeout(1000);
+              }
+            }
+          } catch (e) {
+            // Ignore popup errors
+          }
+
+          // Check for job listings with multiple selectors
+          const jobsVisible = await page.locator('.jobTuple, .srp-jobtuple-wrapper, [data-job-id], .jobTupleHeader, .job-tuple').first().isVisible({ timeout: 5000 }).catch(() => false);
+          
+          if (jobsVisible) {
+            jobsFound = true;
+            break;
+          }
+        } catch (e) {
+          logger.warn(`Naukri URL failed: ${searchUrl}`);
+          continue;
+        }
+      }
+      
+      if (!jobsFound) {
+        logger.warn('No job listings found on Naukri');
+        return jobs;
       }
 
-      // Scrape job listings
-      const jobCards = await page.locator('.jobTuple, .srp-jobtuple-wrapper, [data-job-id]').all();
+      // Scrape job listings with enhanced selectors
+      const jobCards = await page.locator('.jobTuple, .srp-jobtuple-wrapper, [data-job-id], .jobTupleHeader, .job-tuple').all();
       
       for (let i = 0; i < Math.min(jobCards.length, config.scraping.max_jobs_per_site); i++) {
         try {
@@ -265,12 +356,14 @@ class JobScraper {
   }
 
   isRelevantLocation(location) {
-    if (!location) return false;
+    if (!location || location === 'N/A') return true; // Include jobs with unknown location
     const locationLower = location.toLowerCase();
     return config.locations.primary.some(loc => 
       locationLower.includes(loc.toLowerCase())
-    );
+    ) || locationLower.includes('remote') || locationLower.includes('work from home');
   }
+
+
 
   async scrapeAllSites() {
     await this.initialize();
@@ -300,6 +393,9 @@ class JobScraper {
       
       logger.info(`Total unique jobs scraped: ${uniqueJobs.length}`);
       return uniqueJobs;
+    } catch (error) {
+      logger.error('Error during scraping:', error);
+      throw error;
     } finally {
       await this.cleanup();
     }
