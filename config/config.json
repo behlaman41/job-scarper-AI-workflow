@@ -1,0 +1,88 @@
+{
+  "user": {
+    "name": "Job Seeker",
+    "email": "your-email@example.com",
+    "skills": [
+      "JavaScript",
+      "Node.js",
+      "React",
+      "Python",
+      "Docker",
+      "AWS",
+      "MongoDB",
+      "Express.js",
+      "TypeScript",
+      "Git"
+    ],
+    "experience_level": "mid-level",
+    "preferred_roles": [
+      "Full Stack Developer",
+      "Backend Developer",
+      "Software Engineer",
+      "DevOps Engineer",
+      "Frontend Developer"
+    ]
+  },
+  "locations": {
+    "primary": ["Delhi", "Noida", "Gurgaon", "Gurugram"],
+    "secondary": ["Mumbai", "Bangalore", "Hyderabad"]
+  },
+  "scraping": {
+    "max_jobs_per_site": 50,
+    "delay_between_requests": 2000,
+    "timeout": 30000,
+    "retry_attempts": 3,
+    "headless": true,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  },
+  "ai_analysis": {
+    "model": "llama3.1",
+    "ollama_url": "http://ollama:11434",
+    "min_relevance_score": 7,
+    "max_tokens": 500,
+    "temperature": 0.3
+  },
+  "email": {
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587,
+    "smtp_secure": false,
+    "smtp_user": "your-email@gmail.com",
+    "smtp_password": "your-app-password",
+    "from_name": "Job Scraper Bot",
+    "subject_template": "Daily Job Report - {date} ({count} relevant jobs)",
+    "send_time": "09:30",
+    "send_empty_reports": false
+  },
+  "sites": {
+    "linkedin": {
+      "enabled": true,
+      "base_url": "https://www.linkedin.com",
+      "search_url": "https://www.linkedin.com/jobs/search",
+      "login_required": true,
+      "rate_limit": 3000
+    },
+    "indeed": {
+      "enabled": true,
+      "base_url": "https://in.indeed.com",
+      "search_url": "https://in.indeed.com/jobs",
+      "login_required": false,
+      "rate_limit": 2000
+    },
+    "naukri": {
+      "enabled": true,
+      "base_url": "https://www.naukri.com",
+      "search_url": "https://www.naukri.com/jobs-in-delhi-ncr",
+      "login_required": true,
+      "rate_limit": 2500
+    }
+  },
+  "filters": {
+    "min_salary": 500000,
+    "max_salary": 2000000,
+    "job_types": ["Full-time", "Contract"],
+    "exclude_keywords": ["intern", "trainee", "fresher only"],
+    "include_keywords": ["remote", "hybrid", "work from home"],
+    "company_size": ["startup", "mid-size", "large"],
+    "posted_within_days": 7
+  }
+}

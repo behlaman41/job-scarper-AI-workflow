@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=admin123
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=Asia/Kolkata
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/home/node/.n8n/workflows
+      - ./scrapers:/home/node/scrapers
+      - ./config:/home/node/config
+    depends_on:
+      - ollama
+    networks:
+      - jobscraper-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    networks:
+      - jobscraper-network
+    command: >
+      sh -c "ollama serve &
+             sleep 10 &&
+             ollama pull llama3.1 &&
+             wait"
+
+  playwright-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper
+    container_name: playwright-scraper
+    volumes:
+      - ./scrapers:/app/scrapers
+      - ./config:/app/config
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+    networks:
+      - jobscraper-network
+    depends_on:
+      - ollama
+
+volumes:
+  n8n_data:
+  ollama_data:
+
+networks:
+  jobscraper-network:
+    driver: bridge

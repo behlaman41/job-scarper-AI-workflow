@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: jobscraper-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=admin123
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/home/node/.n8n/workflows
+    networks:
+      - jobscraper-network
+    restart: unless-stopped
+
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper
+    container_name: jobscraper-service
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    volumes:
+      - ./config:/app/config:ro
+      - ./data:/app/data
+      - ./scrapers:/app/scrapers:ro
+    networks:
+      - jobscraper-network
+    restart: unless-stopped
+    depends_on:
+      - n8n
+
+volumes:
+  n8n_data:
+
+networks:
+  jobscraper-network:
+    driver: bridge
