@@ -1,4 +1,4 @@
-# 🎯 Job Scraper Automation
+# 🎯 Job Scraper AI Workflow
 
 A comprehensive daily job scraping system that monitors LinkedIn, Indeed, and Naukri for relevant positions in Delhi/Noida/Gurgaon, analyzes them with AI, and emails results automatically.
 
@@ -40,8 +40,8 @@ A comprehensive daily job scraping system that monitors LinkedIn, Indeed, and Na
 ### 1. Clone and Setup
 
 ```bash
-git clone <your-repo>
-cd jobscraper
+git clone https://github.com/behlaman41/job-scarper-AI-workflow.git
+cd job-scarper-AI-workflow
 ```
 
 ### 2. Configure Settings
