@@ -67,10 +67,14 @@ function log(msg, type = 'info') {
 
     // Summary
     const summary = analysisResult.analysis_summary || {};
-    log(`Done. Scraped ${jobs.length}, relevant ${summary.relevant_count || 0}, avg score ${(summary.average_score || 0).toFixed ? summary.average_score.toFixed(2) : summary.average_score}`,'success');
+    const line = `SCRAPED=${jobs.length} RELEVANT=${summary.relevant_count || 0} AVG=${(summary.average_score || 0).toFixed ? summary.average_score.toFixed(2) : summary.average_score}`;
+    log(`Done. ${line}`,'success');
+    try { await fs.appendFile(path.join(__dirname, '../data/runner.log'), `${new Date().toISOString()} ${line}\n`); } catch (_) {}
     process.exit(0);
   } catch (err) {
-    log(err.message || String(err), 'error');
+    const msg = err.message || String(err);
+    log(msg, 'error');
+    try { await fs.appendFile(path.join(__dirname, '../data/runner.log'), `${new Date().toISOString()} ERROR ${msg}\n`); } catch (_) {}
     process.exit(1);
   }
 })();
