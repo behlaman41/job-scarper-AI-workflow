@@ -2,6 +2,7 @@ const nodemailer = require('nodemailer');
 const fs = require('fs-extra');
 const path = require('path');
 const winston = require('winston');
+require('dotenv').config();
 const config = require('../config/config.json');
 
 // Setup logging
@@ -25,14 +26,17 @@ class EmailService {
 
   initializeTransporter() {
     try {
+      const host = process.env.SMTP_HOST || config.email.smtp_host || 'smtp.gmail.com';
+      const port = parseInt(process.env.SMTP_PORT || `${config.email.smtp_port || 587}`, 10);
+      const secure = (process.env.SMTP_SECURE || `${config.email.smtp_secure || false}`).toString() === 'true';
+      const user = process.env.EMAIL_USER || config.email.smtp_user;
+      const pass = process.env.EMAIL_PASS || config.email.smtp_password;
+
       this.transporter = nodemailer.createTransport({
-        host: config.email.smtp_host,
-        port: config.email.smtp_port,
-        secure: config.email.smtp_secure,
-        auth: {
-          user: config.email.smtp_user,
-          pass: config.email.smtp_password
-        },
+        host,
+        port,
+        secure,
+        auth: user && pass ? { user, pass } : undefined,
         tls: {
           rejectUnauthorized: false
         }
@@ -57,9 +61,13 @@ class EmailService {
       const emailContent = this.generateEmailContent(relevant_jobs, analysis_summary);
       const subject = this.generateSubject(relevant_jobs.length);
 
+      const fromName = process.env.EMAIL_FROM_NAME || config.email.from_name || 'Job Scraper Bot';
+      const fromUser = process.env.EMAIL_USER || config.email.smtp_user;
+      const toAddress = process.env.EMAIL_TO || config.user.email;
+
       const mailOptions = {
-        from: `"${config.email.from_name}" <${config.email.smtp_user}>`,
-        to: config.user.email,
+        from: `"${fromName}" <${fromUser}>`,
+        to: toAddress,
         subject: subject,
         html: emailContent,
         attachments: [
@@ -105,6 +113,7 @@ class EmailService {
 
     let html = `
 <!DOCTYPE html>
+
 <html>
 <head>
     <meta charset="utf-8">

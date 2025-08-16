@@ -1,5 +1,6 @@
 const axios = require('axios');
 const winston = require('winston');
+require('dotenv').config();
 const config = require('../config/config.json');
 
 // Setup logging
@@ -17,8 +18,8 @@ const logger = winston.createLogger({
 
 class AIJobAnalyzer {
   constructor() {
-    this.ollamaUrl = config.ai_analysis.ollama_url;
-    this.model = config.ai_analysis.model;
+    this.ollamaUrl = process.env.OLLAMA_HOST || config.ai_analysis.ollama_url || 'http://localhost:11434';
+    this.model = process.env.OLLAMA_MODEL || config.ai_analysis.model;
     this.minRelevanceScore = config.ai_analysis.min_relevance_score;
   }
 
@@ -104,8 +105,8 @@ Be honest and critical in your assessment.`;
         prompt: prompt,
         stream: false,
         options: {
-          temperature: config.ai_analysis.temperature,
-          num_predict: config.ai_analysis.max_tokens
+          temperature: parseFloat(process.env.OLLAMA_TEMPERATURE || `${config.ai_analysis.temperature || 0.3}`),
+          num_predict: parseInt(process.env.OLLAMA_MAX_TOKENS || `${config.ai_analysis.max_tokens || 512}`)
         }
       }, {
         timeout: 30000,
@@ -237,7 +238,8 @@ Be honest and critical in your assessment.`;
     try {
       const response = await axios.get(`${this.ollamaUrl}/api/tags`, { timeout: 5000 });
       const models = response.data.models || [];
-      const hasModel = models.some(model => model.name.includes(this.model));
+      const target = (this.model || '').trim();
+      const hasModel = target ? models.some(m => m.name.includes(target)) : models.length > 0;
       
       if (!hasModel) {
         logger.warn(`Model ${this.model} not found. Available models:`, models.map(m => m.name));

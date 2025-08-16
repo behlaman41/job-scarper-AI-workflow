@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node scrapers/server.js",
     "scrape": "node scrapers/index.js",
+    "jobscraper": "node scripts/run-workflow.js",
+    "jobscraper:docker": "docker-compose run --rm jobscraper-run",
     "test": "node test.js",
     "setup-interactive": "node setup.js",
     "setup": "docker-compose up -d",

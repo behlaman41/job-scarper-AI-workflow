@@ -3,6 +3,8 @@
 const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
+require('dotenv').config();
+const config = require('./config/config.json');
 
 function log(message, type = 'info') {
   const colors = {
@@ -17,9 +19,10 @@ function log(message, type = 'info') {
 
 class SystemTester {
   constructor() {
-    this.scraperUrl = 'http://localhost:3000';
-    this.n8nUrl = 'http://localhost:5678';
-    this.ollamaUrl = 'http://localhost:11434';
+    this.scraperUrl = process.env.SCRAPER_BASE_URL || 'http://localhost:3000';
+    this.n8nUrl = process.env.N8N_BASE_URL || 'http://localhost:5678';
+    this.ollamaUrl = process.env.OLLAMA_HOST || 'http://localhost:11434';
+    this.model = process.env.OLLAMA_MODEL || (config.ai_analysis && config.ai_analysis.model) || 'llama3.1';
     this.results = {
       scraper: false,
       ollama: false,
@@ -52,14 +55,14 @@ class SystemTester {
     try {
       const response = await axios.get(`${this.ollamaUrl}/api/tags`, { timeout: 10000 });
       const models = response.data.models || [];
-      const hasLlama = models.some(model => model.name.includes('llama3.1'));
+      const hasModel = this.model ? models.some(model => model.name.includes(this.model)) : models.length > 0;
       
-      if (hasLlama) {
-        log('✅ Ollama service is running with llama3.1 model', 'success');
+      if (hasModel) {
+        log(`✅ Ollama service is running with model: ${this.model}`, 'success');
         this.results.ollama = true;
         return true;
       } else {
-        log('⚠️ Ollama is running but llama3.1 model not found', 'warning');
+        log(`⚠️ Ollama is running but model not found: ${this.model}`, 'warning');
         log('Available models:', 'info');
         models.forEach(model => log(`  - ${model.name}`, 'info'));
         return false;

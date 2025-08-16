@@ -21,6 +21,26 @@ services:
       - jobscraper-network
     restart: unless-stopped
 
+  jobscraper-run:
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper
+    container_name: jobscraper-runner
+    command: ["node", "scripts/run-workflow.js"]
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - TZ=Asia/Kolkata
+    volumes:
+      - ./scrapers:/app/scrapers
+      - ./scripts:/app/scripts
+      - ./config:/app/config
+      - ./data:/app/data
+    networks:
+      - jobscraper-network
+    # One-shot job; no restart policy
+
   n8n:
     build:
       context: .

@@ -144,14 +144,20 @@ wait_for_services() {
     
     # Wait for Ollama and model download
     log_info "Waiting for Ollama service and model download (this may take several minutes)..."
+    OLLAMA_TAGS_URL=${OLLAMA_HOST:-http://localhost:11434}/api/tags
+    TARGET_MODEL=${OLLAMA_MODEL}
     for i in {1..180}; do  # 6 minutes timeout
-        if curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then
-            # Check if llama3.1 model is available
-            if curl -s http://localhost:11434/api/tags | grep -q "llama3.1"; then
-                log_success "Ollama service and llama3.1 model are ready"
-                break
+        if curl -s "$OLLAMA_TAGS_URL" >/dev/null 2>&1; then
+            if [ -n "$TARGET_MODEL" ]; then
+                if curl -s "$OLLAMA_TAGS_URL" | grep -q "$TARGET_MODEL"; then
+                    log_success "Ollama service and model '$TARGET_MODEL' are ready"
+                    break
+                else
+                    log_info "Ollama running; waiting for model '$TARGET_MODEL'... ($i/180)"
+                fi
             else
-                log_info "Ollama is running but still downloading llama3.1 model... ($i/180)"
+                log_success "Ollama service is reachable"
+                break
             fi
         fi
         if [ $i -eq 180 ]; then

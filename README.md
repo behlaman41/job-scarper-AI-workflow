@@ -15,6 +15,15 @@ A comprehensive daily job scraping system that monitors LinkedIn, Indeed, and Na
 ## 🏗️ Architecture
 
 ```
+
+Or via `.env`:
+
+```
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=llama3.2:1b
+OLLAMA_TEMPERATURE=0.3
+OLLAMA_MAX_TOKENS=500
+```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │    n8n      │───▶│  Playwright │───▶│   Ollama    │
 │ Workflow    │    │  Scraper    │    │ AI Analysis │
@@ -63,7 +72,34 @@ Edit `config/config.json`:
 }
 ```
 
-### 3. Start Services
+### 3. One-Command Run (email relevant jobs)
+
+```bash
+# Runs scrape → AI analyze → email in one go
+npm run jobscraper
+```
+
+This uses `.env` for email/AI settings. Ensure:
+
+- `EMAIL_USER`, `EMAIL_PASS` (SMTP credentials)
+- `EMAIL_TO` (optional; defaults to user email)
+- `OLLAMA_HOST`, `OLLAMA_MODEL` (running local model)
+
+### 4. One-Command Docker Run (no local Node)
+
+```bash
+# Build and run the one-shot workflow inside Docker
+docker-compose run --rm jobscraper-run
+
+# Or via npm script
+npm run jobscraper:docker
+```
+
+Notes:
+- For Docker on macOS/Windows, set `OLLAMA_HOST=http://host.docker.internal:11434` in `.env` so the container can reach your host’s Ollama.
+- Results and logs persist in `./data` (mounted into the container).
+
+### 5. Start Services (optional)
 
 ```bash
 # Start all services
@@ -73,7 +109,7 @@ docker-compose up -d
 docker-compose logs -f
 ```
 
-### 4. Access n8n Dashboard
+### 6. Access n8n Dashboard
 
 1. Open http://localhost:5678
 2. Login with `admin` / `admin123`
@@ -89,7 +125,16 @@ docker-compose logs -f
    - Go to Google Account Settings
    - Security → 2-Step Verification → App passwords
    - Generate password for "Mail"
-3. Update `config/config.json` with your email and app password
+3. Preferred: put credentials in `.env` (safer for secrets):
+
+```
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-password
+EMAIL_FROM_NAME=Job Scraper Bot
+EMAIL_TO=your-email@gmail.com
+```
+
+You can still keep non-sensitive defaults in `config/config.json`. The app prefers `.env` at runtime.
 
 ### Skills and Preferences
 
