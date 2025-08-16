@@ -21,9 +21,13 @@ class AIJobAnalyzer {
     this.ollamaUrl = process.env.OLLAMA_HOST || config.ai_analysis.ollama_url || 'http://localhost:11434';
     this.model = process.env.OLLAMA_MODEL || config.ai_analysis.model;
     this.minRelevanceScore = config.ai_analysis.min_relevance_score;
+    this.forceFallback = false;
   }
 
   async analyzeJob(job) {
+    if (this.forceFallback) {
+      return this.analyzeWithFallback(job);
+    }
     try {
       const prompt = this.createAnalysisPrompt(job);
       const response = await this.callOllama(prompt);
@@ -43,17 +47,8 @@ class AIJobAnalyzer {
         is_relevant: analysis.score >= this.minRelevanceScore
       };
     } catch (error) {
-      logger.error(`Failed to analyze job: ${job.title}`, error);
-      return {
-        ...job,
-        ai_analysis: {
-          relevance_score: 0,
-          summary: 'Analysis failed',
-          error: error.message,
-          analyzed_at: new Date().toISOString()
-        },
-        is_relevant: false
-      };
+      logger.warn(`LLM analysis failed for: ${job.title}. Using fallback. Reason: ${error.message}`);
+      return this.analyzeWithFallback(job);
     }
   }
 
@@ -205,6 +200,46 @@ Be honest and critical in your assessment.`;
         top_companies: this.getTopCompanies(relevantJobs),
         top_skills: this.getTopSkills(relevantJobs)
       }
+    };
+  }
+
+  analyzeWithFallback(job) {
+    const text = `${job.title} ${job.company} ${job.location} ${job.description || ''}`.toLowerCase();
+    const skills = (config.user.skills || []);
+    const includeKeywords = (config.filters && config.filters.include_keywords) || [];
+    const primaryLocations = (config.locations && config.locations.primary) || [];
+
+    let matchCount = 0;
+    const matchedSkills = [];
+    skills.forEach(s => {
+      if (s && text.includes(s.toLowerCase())) {
+        matchCount++;
+        matchedSkills.push(s);
+      }
+    });
+
+    let score = Math.round((matchCount / Math.max(3, skills.length)) * 8); // up to 8 points
+    includeKeywords.forEach(k => { if (k && text.includes(k.toLowerCase())) score += 1; });
+
+    const locMatch = primaryLocations.some(l => (job.location || '').toLowerCase().includes(l.toLowerCase()));
+    if (locMatch) score += 1;
+
+    score = Math.max(1, Math.min(10, score));
+
+    const summary = `Fallback scoring based on skill & keyword matches (${matchedSkills.join(', ')})${locMatch ? ' and location' : ''}.`;
+
+    return {
+      ...job,
+      ai_analysis: {
+        relevance_score: score,
+        summary,
+        key_skills: matchedSkills.slice(0, 5),
+        pros: [],
+        cons: [],
+        salary_estimate: 'Not specified',
+        analyzed_at: new Date().toISOString()
+      },
+      is_relevant: score >= this.minRelevanceScore
     };
   }
 

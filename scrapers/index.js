@@ -33,7 +33,14 @@ class JobScraper {
       
       this.context = await this.browser.newContext({
         userAgent: config.scraping.user_agent,
-        viewport: { width: 1920, height: 1080 }
+        viewport: { width: 1920, height: 1080 },
+        locale: 'en-IN',
+        timezoneId: 'Asia/Kolkata',
+        javaScriptEnabled: true,
+        extraHTTPHeaders: {
+          'accept-language': 'en-IN,en;q=0.9',
+          'upgrade-insecure-requests': '1'
+        }
       });
 
       // Load cookies if they exist
@@ -89,8 +96,9 @@ class JobScraper {
       
       for (const searchUrl of searchUrls) {
         try {
-          await page.goto(searchUrl, { waitUntil: 'networkidle' });
-          await page.waitForTimeout(3000);
+          await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: config.scraping.timeout });
+          await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+          await this.autoScroll(page);
 
           // Check multiple selectors for job listings
           const jobsVisible = await page.locator('.jobs-search__results-list, .job-card-container, .base-search-card, .job-search-card').first().isVisible({ timeout: 5000 }).catch(() => false);
@@ -126,7 +134,6 @@ class JobScraper {
           
           if (title && title !== 'N/A' && title.trim() !== '') {
             const finalLink = link && link.startsWith('http') ? link : `https://linkedin.com${link}`;
-            const description = await this.fetchJobDescription(finalLink, 'linkedin');
             jobs.push({
               title: title.trim(),
               company: company.trim(),
@@ -134,7 +141,7 @@ class JobScraper {
               link: finalLink,
               source: 'LinkedIn',
               scraped_at: new Date().toISOString(),
-              description
+              description: ''
             });
           }
           
@@ -144,7 +151,9 @@ class JobScraper {
         }
       }
 
-      logger.info(`LinkedIn scraping completed: ${jobs.length} jobs found`);
+      // Enrich with descriptions (limited concurrency)
+      await this.enrichJobsWithDescriptions(jobs, 'linkedin');
+      logger.info(`LinkedIn scraping completed: ${jobs.length} jobs found (descriptions enriched)`);
     } catch (error) {
       logger.error('LinkedIn scraping failed:', error);
     } finally {
@@ -176,8 +185,8 @@ class JobScraper {
       
       for (const searchUrl of searchUrls) {
         try {
-          await page.goto(searchUrl, { waitUntil: 'networkidle' });
-          await page.waitForTimeout(3000);
+          await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: config.scraping.timeout });
+          await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 
           // Handle various popups
           try {
@@ -234,7 +243,6 @@ class JobScraper {
           
           if (title && title !== 'N/A' && title.trim() !== '') {
             const finalLink = link && link.startsWith('http') ? link : `https://in.indeed.com${link}`;
-            const description = await this.fetchJobDescription(finalLink, 'indeed');
             jobs.push({
               title: title.trim(),
               company: company.trim(),
@@ -242,7 +250,7 @@ class JobScraper {
               link: finalLink,
               source: 'Indeed',
               scraped_at: new Date().toISOString(),
-              description
+              description: ''
             });
           }
           
@@ -252,7 +260,8 @@ class JobScraper {
         }
       }
 
-      logger.info(`Indeed scraping completed: ${jobs.length} jobs found`);
+      await this.enrichJobsWithDescriptions(jobs, 'indeed');
+      logger.info(`Indeed scraping completed: ${jobs.length} jobs found (descriptions enriched)`);
     } catch (error) {
       logger.error('Indeed scraping failed:', error);
     } finally {
@@ -284,8 +293,9 @@ class JobScraper {
       
       for (const searchUrl of searchUrls) {
         try {
-          await page.goto(searchUrl, { waitUntil: 'networkidle' });
-          await page.waitForTimeout(4000);
+          await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: config.scraping.timeout });
+          await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {});
+          await this.autoScroll(page);
 
           // Handle various popups
           try {
@@ -333,7 +343,6 @@ class JobScraper {
           
           if (title && title !== 'N/A' && this.isRelevantLocation(location)) {
             const finalLink = link && link.startsWith('http') ? link : `https://www.naukri.com${link}`;
-            const description = await this.fetchJobDescription(finalLink, 'naukri');
             jobs.push({
               title: title.trim(),
               company: company.trim(),
@@ -341,7 +350,7 @@ class JobScraper {
               link: finalLink,
               source: 'Naukri',
               scraped_at: new Date().toISOString(),
-              description
+              description: ''
             });
           }
           
@@ -351,7 +360,8 @@ class JobScraper {
         }
       }
 
-      logger.info(`Naukri scraping completed: ${jobs.length} jobs found`);
+      await this.enrichJobsWithDescriptions(jobs, 'naukri');
+      logger.info(`Naukri scraping completed: ${jobs.length} jobs found (descriptions enriched)`);
     } catch (error) {
       logger.error('Naukri scraping failed:', error);
     } finally {
@@ -418,6 +428,26 @@ class JobScraper {
     }
   }
 
+  async autoScroll(page) {
+    try {
+      await page.evaluate(async () => {
+        await new Promise((resolve) => {
+          let totalHeight = 0;
+          const distance = 600;
+          const timer = setInterval(() => {
+            const scrollHeight = document.body.scrollHeight;
+            window.scrollBy(0, distance);
+            totalHeight += distance;
+            if (totalHeight >= scrollHeight) {
+              clearInterval(timer);
+              resolve();
+            }
+          }, 300);
+        });
+      });
+    } catch (_) {}
+  }
+
   async fetchJobDescription(url, site) {
     try {
       const page = await this.context.newPage();
@@ -468,6 +498,43 @@ class JobScraper {
       .replace(/\u00a0/g, ' ')
       .replace(/\s{2,}/g, ' ')
       .trim();
+  }
+
+  async enrichJobsWithDescriptions(jobs, site) {
+    const limit = (config.scraping && config.scraping.max_detail_fetch) || 20;
+    const concurrency = (config.scraping && config.scraping.detail_concurrency) || 3;
+    const targets = jobs.slice(0, Math.min(limit, jobs.length));
+    let active = 0;
+    let index = 0;
+    let completed = 0;
+    const start = Date.now();
+
+    return await new Promise(resolve => {
+      const next = () => {
+        while (active < concurrency && index < targets.length) {
+          const job = targets[index++];
+          active++;
+          this.fetchJobDescription(job.link, site)
+            .then(desc => { job.description = desc; })
+            .catch(() => { job.description = job.description || ''; })
+            .finally(() => {
+              active--;
+              completed++;
+              if (completed % 5 === 0) {
+                logger.info(`Enriched ${completed}/${targets.length} ${site} jobs with descriptions`);
+              }
+              if (completed === targets.length) {
+                const ms = Date.now() - start;
+                logger.info(`Description enrichment completed for ${site}: ${completed} items in ${ms}ms`);
+                resolve();
+              } else {
+                next();
+              }
+            });
+        }
+      };
+      next();
+    });
   }
 }
 
