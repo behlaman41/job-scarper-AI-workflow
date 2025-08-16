@@ -125,14 +125,16 @@ class JobScraper {
           const link = await card.locator('a').first().getAttribute('href').catch(() => '#');
           
           if (title && title !== 'N/A' && title.trim() !== '') {
+            const finalLink = link && link.startsWith('http') ? link : `https://linkedin.com${link}`;
+            const description = await this.fetchJobDescription(finalLink, 'linkedin');
             jobs.push({
               title: title.trim(),
               company: company.trim(),
               location: location.trim(),
-              link: link.startsWith('http') ? link : `https://linkedin.com${link}`,
+              link: finalLink,
               source: 'LinkedIn',
               scraped_at: new Date().toISOString(),
-              description: 'Click link for full description'
+              description
             });
           }
           
@@ -231,14 +233,16 @@ class JobScraper {
           const link = await card.locator('h2 a, .jobTitle a, a[data-jk]').first().getAttribute('href').catch(() => '#');
           
           if (title && title !== 'N/A' && title.trim() !== '') {
+            const finalLink = link && link.startsWith('http') ? link : `https://in.indeed.com${link}`;
+            const description = await this.fetchJobDescription(finalLink, 'indeed');
             jobs.push({
               title: title.trim(),
               company: company.trim(),
               location: location.trim(),
-              link: link.startsWith('http') ? link : `https://in.indeed.com${link}`,
+              link: finalLink,
               source: 'Indeed',
               scraped_at: new Date().toISOString(),
-              description: 'Click link for full description'
+              description
             });
           }
           
@@ -328,14 +332,16 @@ class JobScraper {
           const link = await card.locator('.title a, .jobTupleHeader a').first().getAttribute('href').catch(() => '#');
           
           if (title && title !== 'N/A' && this.isRelevantLocation(location)) {
+            const finalLink = link && link.startsWith('http') ? link : `https://www.naukri.com${link}`;
+            const description = await this.fetchJobDescription(finalLink, 'naukri');
             jobs.push({
               title: title.trim(),
               company: company.trim(),
               location: location.trim(),
-              link: link.startsWith('http') ? link : `https://www.naukri.com${link}`,
+              link: finalLink,
               source: 'Naukri',
               scraped_at: new Date().toISOString(),
-              description: 'Click link for full description'
+              description
             });
           }
           
@@ -410,6 +416,58 @@ class JobScraper {
     } catch (error) {
       logger.error('Error during cleanup:', error);
     }
+  }
+
+  async fetchJobDescription(url, site) {
+    try {
+      const page = await this.context.newPage();
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: config.scraping.timeout || 30000 });
+      await page.waitForTimeout(1500);
+
+      let selector = '';
+      if (site === 'indeed') {
+        selector = '#jobDescriptionText, .jobsearch-jobDescriptionText, [id="jobDescriptionText"]';
+      } else if (site === 'linkedin') {
+        selector = '.show-more-less-html__markup, .jobs-description__content, [data-test-job-description-text], [class*="description"]';
+      } else if (site === 'naukri') {
+        selector = '.dang-inner-html, .job-description, .jd-description, [class*="job-desc"]';
+      }
+
+      let text = '';
+      if (selector) {
+        try {
+          const el = page.locator(selector).first();
+          if (await el.isVisible({ timeout: 5000 }).catch(() => false)) {
+            text = await el.innerText();
+          }
+        } catch (_) {}
+      }
+
+      if (!text || text.trim() === '') {
+        // Fallback: get all text from main/content area
+        try {
+          const bodyText = await page.evaluate(() => document.body ? document.body.innerText : '');
+          text = bodyText;
+        } catch (_) {}
+      }
+
+      await page.close();
+      return this.cleanText(text).slice(0, 4000) || 'Description not available';
+    } catch (err) {
+      logger.warn(`Failed to fetch job description for ${site}: ${url} - ${err.message}`);
+      return 'Description not available';
+    }
+  }
+
+  cleanText(input) {
+    if (!input) return '';
+    return String(input)
+      .replace(/\r/g, ' ')
+      .replace(/\n+/g, '\n')
+      .replace(/\t/g, ' ')
+      .replace(/\u00a0/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
   }
 }
 

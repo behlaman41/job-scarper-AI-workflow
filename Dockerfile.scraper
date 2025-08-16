@@ -21,13 +21,15 @@ RUN npx playwright install --with-deps chromium
 
 # Copy application code
 COPY scrapers/ ./scrapers/
+COPY scripts/ ./scripts/
 COPY config/ ./config/
 
 # Create data directory
 RUN mkdir -p /app/data
 
 # Set permissions
-RUN chmod +x /app/scrapers/*.js
+RUN chmod +x /app/scrapers/*.js && \
+    chmod +x /app/scripts/*.js || true
 
 # Expose port for health checks
 EXPOSE 3000
