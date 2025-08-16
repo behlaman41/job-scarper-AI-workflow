@@ -36,7 +36,8 @@ function log(msg, type = 'info') {
     log('Checking AI service/model...');
     const connected = await analyzer.testConnection();
     if (!connected) {
-      throw new Error('AI service (Ollama) not available or model missing');
+      log('AI service not available or model missing. Using fallback scoring.', 'warning');
+      analyzer.forceFallback = true;
     }
 
     log(`Analyzing ${jobs.length} jobs with AI...`);
@@ -73,4 +74,3 @@ function log(msg, type = 'info') {
     process.exit(1);
   }
 })();
-

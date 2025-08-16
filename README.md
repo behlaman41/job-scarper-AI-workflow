@@ -84,6 +84,7 @@ This uses `.env` for email/AI settings. Ensure:
 - `EMAIL_USER`, `EMAIL_PASS` (SMTP credentials)
 - `EMAIL_TO` (optional; defaults to user email)
 - `OLLAMA_HOST`, `OLLAMA_MODEL` (running local model)
+ - Optional: `EMAIL_SEND_EMPTY_REPORTS=true` to email even when 0 relevant
 
 ### 4. One-Command Docker Run (no local Node)
 

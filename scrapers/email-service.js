@@ -53,7 +53,8 @@ class EmailService {
     try {
       const { relevant_jobs, analysis_summary } = analysisResult;
       
-      if (relevant_jobs.length === 0 && !config.email.send_empty_reports) {
+      const sendEmpty = (process.env.EMAIL_SEND_EMPTY_REPORTS || '').toString().toLowerCase() === 'true' || !!config.email.send_empty_reports;
+      if (relevant_jobs.length === 0 && !sendEmpty) {
         logger.info('No relevant jobs found and empty reports disabled');
         return { success: true, message: 'No relevant jobs to report' };
       }
