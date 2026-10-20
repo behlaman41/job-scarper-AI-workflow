@@ -3,6 +3,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const winston = require('winston');
 const config = require('../config/config.json');
+const { politeGoto } = require('./polite');
 
 // Setup logging
 const logger = winston.createLogger({
@@ -96,7 +97,7 @@ class JobScraper {
       
       for (const searchUrl of searchUrls) {
         try {
-          await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: config.scraping.timeout });
+          await politeGoto(page, searchUrl, { waitUntil: 'domcontentloaded', timeout: config.scraping.timeout });
           await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
           await this.autoScroll(page);
 
@@ -185,7 +186,7 @@ class JobScraper {
       
       for (const searchUrl of searchUrls) {
         try {
-          await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: config.scraping.timeout });
+          await politeGoto(page, searchUrl, { waitUntil: 'domcontentloaded', timeout: config.scraping.timeout });
           await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 
           // Handle various popups
@@ -293,7 +294,7 @@ class JobScraper {
       
       for (const searchUrl of searchUrls) {
         try {
-          await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: config.scraping.timeout });
+          await politeGoto(page, searchUrl, { waitUntil: 'domcontentloaded', timeout: config.scraping.timeout });
           await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {});
           await this.autoScroll(page);
 
@@ -449,9 +450,10 @@ class JobScraper {
   }
 
   async fetchJobDescription(url, site) {
+    let page;
     try {
-      const page = await this.context.newPage();
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: config.scraping.timeout || 30000 });
+      page = await this.context.newPage();
+      await politeGoto(page, url, { waitUntil: 'domcontentloaded', timeout: config.scraping.timeout || 30000 });
       await page.waitForTimeout(1500);
 
       let selector = '';
@@ -481,11 +483,12 @@ class JobScraper {
         } catch (_) {}
       }
 
-      await page.close();
       return this.cleanText(text).slice(0, 4000) || 'Description not available';
     } catch (err) {
       logger.warn(`Failed to fetch job description for ${site}: ${url} - ${err.message}`);
       return 'Description not available';
+    } finally {
+      if (page) await page.close().catch(() => {});
     }
   }
 
