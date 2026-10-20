@@ -170,7 +170,7 @@ async function main() {
   log('1. Start the services: npm run setup', 'info');
   log('2. Wait for all services to be ready (2-3 minutes)', 'info');
   log('3. Access n8n dashboard: http://localhost:5678', 'info');
-  log('4. Login with: admin / admin123', 'info');
+  log('4. Login with N8N_BASIC_AUTH_USER / N8N_BASIC_AUTH_PASSWORD from .env', 'info');
   log('5. Import workflow from workflows/daily-job-scraper.json', 'info');
   log('6. Activate the workflow for daily automation', 'info');
   log('\nManual testing:', 'info');

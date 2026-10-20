@@ -81,7 +81,7 @@ npm run jobscraper
 
 This uses `.env` for email/AI settings. Ensure:
 
-- `EMAIL_USER`, `EMAIL_PASS` (SMTP credentials)
+- `SMTP_USER`, `SMTP_PASSWORD` (or `EMAIL_USER`, `EMAIL_PASS`): SMTP credentials
 - `EMAIL_TO` (optional; defaults to user email)
 - `OLLAMA_HOST`, `OLLAMA_MODEL` (running local model)
  - Optional: `EMAIL_SEND_EMPTY_REPORTS=true` to email even when 0 relevant
@@ -113,7 +113,7 @@ docker-compose logs -f
 ### 6. Access n8n Dashboard
 
 1. Open http://localhost:5678
-2. Login with `admin` / `admin123`
+2. Login with `N8N_BASIC_AUTH_USER` / `N8N_BASIC_AUTH_PASSWORD` from `.env`
 3. Import the workflow from `workflows/daily-job-scraper.json`
 4. Activate the workflow
 

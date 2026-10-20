@@ -29,17 +29,14 @@ class EmailService {
       const host = process.env.SMTP_HOST || config.email.smtp_host || 'smtp.gmail.com';
       const port = parseInt(process.env.SMTP_PORT || `${config.email.smtp_port || 587}`, 10);
       const secure = (process.env.SMTP_SECURE || `${config.email.smtp_secure || false}`).toString() === 'true';
-      const user = process.env.EMAIL_USER || config.email.smtp_user;
-      const pass = process.env.EMAIL_PASS || config.email.smtp_password;
+      const user = process.env.EMAIL_USER || process.env.SMTP_USER || config.email.smtp_user;
+      const pass = process.env.EMAIL_PASS || process.env.SMTP_PASSWORD || config.email.smtp_password;
 
       this.transporter = nodemailer.createTransport({
         host,
         port,
         secure,
-        auth: user && pass ? { user, pass } : undefined,
-        tls: {
-          rejectUnauthorized: false
-        }
+        auth: user && pass ? { user, pass } : undefined
       });
       
       logger.info('Email transporter initialized');
@@ -63,8 +60,8 @@ class EmailService {
       const subject = this.generateSubject(relevant_jobs.length);
 
       const fromName = process.env.EMAIL_FROM_NAME || config.email.from_name || 'Job Scraper Bot';
-      const fromUser = process.env.EMAIL_USER || config.email.smtp_user;
-      const toAddress = process.env.EMAIL_TO || config.user.email;
+      const fromUser = process.env.EMAIL_USER || process.env.SMTP_USER || config.email.smtp_user;
+      const toAddress = process.env.EMAIL_TO || process.env.USER_EMAIL || config.user.email;
 
       const mailOptions = {
         from: `"${fromName}" <${fromUser}>`,

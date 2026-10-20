@@ -194,7 +194,7 @@ show_status() {
     echo
     log_info "📋 Next steps:"
     echo "1. Access n8n dashboard: http://localhost:5678"
-    echo "2. Login with: admin / admin123"
+    echo "2. Login with N8N_BASIC_AUTH_USER / N8N_BASIC_AUTH_PASSWORD from .env"
     echo "3. Import workflow from workflows/daily-job-scraper.json"
     echo "4. Activate the workflow for daily automation"
     echo
